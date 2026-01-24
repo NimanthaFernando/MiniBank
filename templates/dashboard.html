@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Welcome, {{ user.username }}!</h2>
+<p><strong>Balance:</strong> ${{ "%.2f"|format(user.balance) }}</p>
+
+<h3>Deposit Money</h3>
+<form method="post" action="/deposit">
+    <input type="number" name="amount" placeholder="Amount" step="0.01" min="1" required>
+    <button type="submit">Deposit</button>
+</form>
+
+<h3>Transaction History</h3>
+<table>
+    <tr>
+        <th>Type</th>
+        <th>Amount</th>
+        <th>Date</th>
+        <th>Description</th>
+    </tr>
+    {% for txn in transactions %}
+    <tr>
+        <td>{{ txn.type }}</td>
+        <td>${{ "%.2f"|format(txn.amount) }}</td>
+        <td>{{ txn.timestamp }}</td>
+        <td>{{ txn.description }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No transactions yet.</td></tr>
+    {% endfor %}
+</table>
+{% endblock %}
