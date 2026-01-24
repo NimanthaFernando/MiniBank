@@ -1,1 +1,1 @@
-Mini BAck project
+Mini Bank project
