@@ -1,2 +1,4 @@
-def test_basic():
-    assert 1 + 1 == 2
+from app import app
+
+def test_app_exists():
+    assert app is not None
