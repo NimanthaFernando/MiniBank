@@ -2,15 +2,16 @@ from flask import Flask, render_template, request, redirect, session, flash, url
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
 import hashlib
+import os
 
 app = Flask(__name__)
-app.secret_key = 'secret123'
+app.secret_key = os.environ.get('SECRET_KEY', 'secret123')
 
 # --- MySQL Configuration ---
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''
-app.config['MYSQL_DB'] = 'bankdb'
+app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', 'localhost')
+app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root')
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', '')
+app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'bankdb')
 
 mysql = MySQL(app)
 
