@@ -1,19 +1,33 @@
 from flask import Flask, render_template, request, redirect, session, flash, url_for
-from flask_mysqldb import MySQL
-import MySQLdb.cursors
 import hashlib
 import os
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'secret123')
 
-# --- MySQL Configuration ---
-app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', 'localhost')
-app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root')
-app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', '')
-app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'bankdb')
+# --- MySQL Configuration (optional - app still starts without a DB) ---
+DB_AVAILABLE = False
+mysql = None
 
-mysql = MySQL(app)
+MYSQL_HOST = os.environ.get('MYSQL_HOST')
+MYSQL_USER = os.environ.get('MYSQL_USER')
+MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD')
+MYSQL_DB = os.environ.get('MYSQL_DB', 'bankdb')
+
+if MYSQL_HOST and MYSQL_USER and MYSQL_PASSWORD:
+    try:
+        from flask_mysqldb import MySQL
+        import MySQLdb.cursors
+        app.config['MYSQL_HOST'] = MYSQL_HOST
+        app.config['MYSQL_USER'] = MYSQL_USER
+        app.config['MYSQL_PASSWORD'] = MYSQL_PASSWORD
+        app.config['MYSQL_DB'] = MYSQL_DB
+        mysql = MySQL(app)
+        DB_AVAILABLE = True
+    except Exception as e:
+        print(f"[WARNING] MySQL not available: {e}. Running in frontend-only mode.")
+else:
+    print("[WARNING] MySQL env vars not set. Running in frontend-only mode.")
 
 
 @app.route('/')
@@ -25,11 +39,16 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if not DB_AVAILABLE:
+        flash('Database not configured. Login is currently unavailable.', 'danger')
+        return render_template('login.html')
+
     msg = ''
     if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
         username = request.form['username']
         password = hashlib.sha256(request.form['password'].encode()).hexdigest()
 
+        import MySQLdb.cursors
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password))
         account = cursor.fetchone()
@@ -45,6 +64,10 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if not DB_AVAILABLE:
+        flash('Database not configured. Registration is currently unavailable.', 'danger')
+        return render_template('register.html')
+
     if request.method == 'POST':
         username = request.form['username']
         password = hashlib.sha256(request.form['password'].encode()).hexdigest()
@@ -64,6 +87,11 @@ def dashboard():
     if 'loggedin' not in session:
         return redirect(url_for('index'))
 
+    if not DB_AVAILABLE:
+        flash('Database not configured.', 'danger')
+        return redirect(url_for('index'))
+
+    import MySQLdb.cursors
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT * FROM users WHERE id=%s", (session['id'],))
     user = cursor.fetchone()
@@ -78,6 +106,11 @@ def dashboard():
 def deposit():
     if 'loggedin' not in session:
         return redirect(url_for('index'))
+
+    if not DB_AVAILABLE:
+        flash('Database not configured.', 'danger')
+        return redirect(url_for('index'))
+
     amount = float(request.form['amount'])
     cursor = mysql.connection.cursor()
     cursor.execute("UPDATE users SET balance = balance + %s WHERE id=%s", (amount, session['id']))

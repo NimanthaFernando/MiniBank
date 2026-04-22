@@ -1,4 +1,6 @@
 Flask
 gunicorn
-flask-mysqldb
-mysqlclient
+# flask-mysqldb and mysqlclient are optional (needed only when DB is configured)
+# Uncomment below when deploying with a MySQL database:
+# flask-mysqldb
+# mysqlclient
