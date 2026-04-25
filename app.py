@@ -165,5 +165,41 @@ def logout():
     return redirect(url_for('index'))
 
 
+@app.route('/debug')
+def debug_info():
+    """Temporary debug endpoint - REMOVE after fixing DB connection."""
+    import pyodbc
+    info = {
+        'SQL_SERVER': SQL_SERVER if SQL_SERVER else '❌ NOT SET',
+        'SQL_DATABASE': SQL_DATABASE if SQL_DATABASE else '❌ NOT SET',
+        'SQL_USER': SQL_USER if SQL_USER else '❌ NOT SET',
+        'SQL_PASSWORD': '✅ SET' if SQL_PASSWORD else '❌ NOT SET',
+        'DB_AVAILABLE': DB_AVAILABLE,
+        'ODBC_DRIVERS': pyodbc.drivers(),
+    }
+
+    # Try connecting and capture error
+    connection_error = None
+    if SQL_SERVER and SQL_USER and SQL_PASSWORD and SQL_DATABASE:
+        try:
+            test_str = (
+                f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+                f"SERVER={SQL_SERVER};"
+                f"DATABASE={SQL_DATABASE};"
+                f"UID={SQL_USER};"
+                f"PWD={SQL_PASSWORD};"
+                f"Encrypt=yes;"
+                f"TrustServerCertificate=no;"
+            )
+            test_conn = pyodbc.connect(test_str, timeout=10)
+            test_conn.close()
+            connection_error = "✅ Connection successful!"
+        except Exception as e:
+            connection_error = f"❌ {str(e)}"
+
+    info['CONNECTION_TEST'] = connection_error
+    return '<br>'.join([f'<b>{k}</b>: {v}' for k, v in info.items()])
+
+
 if __name__ == '__main__':
     app.run(debug=True)
