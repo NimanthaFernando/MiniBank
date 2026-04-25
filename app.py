@@ -5,56 +5,56 @@ import os
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'secret123')
 
-# --- Azure MySQL Flexible Server Configuration ---
+# --- Azure SQL Database Configuration ---
 DB_AVAILABLE = False
-db_config = None
+conn_str = None
 
-MYSQL_HOST = os.environ.get('MYSQL_HOST')       # e.g. yourserver.mysql.database.azure.com
-MYSQL_USER = os.environ.get('MYSQL_USER')        # e.g. sqladmin
-MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD')
-MYSQL_DB = os.environ.get('MYSQL_DB', 'bankdb')
+SQL_SERVER = os.environ.get('SQL_SERVER')       # e.g. yourserver.database.windows.net
+SQL_DATABASE = os.environ.get('SQL_DATABASE')    # e.g. bankdb
+SQL_USER = os.environ.get('SQL_USER')            # e.g. sqladmin
+SQL_PASSWORD = os.environ.get('SQL_PASSWORD')
 
-if MYSQL_HOST and MYSQL_USER and MYSQL_PASSWORD:
+if SQL_SERVER and SQL_USER and SQL_PASSWORD and SQL_DATABASE:
     try:
-        import pymysql
-        db_config = {
-            'host': MYSQL_HOST,
-            'user': MYSQL_USER,
-            'password': MYSQL_PASSWORD,
-            'database': MYSQL_DB,
-            'ssl': {'ca': '/opt/ssl/DigiCertGlobalRootCA.crt.pem'},
-            'cursorclass': pymysql.cursors.DictCursor,
-        }
+        import pyodbc
+        conn_str = (
+            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+            f"SERVER={SQL_SERVER};"
+            f"DATABASE={SQL_DATABASE};"
+            f"UID={SQL_USER};"
+            f"PWD={SQL_PASSWORD};"
+            f"Encrypt=yes;"
+            f"TrustServerCertificate=no;"
+        )
         # Test connection on startup
-        test_conn = pymysql.connect(**db_config)
+        test_conn = pyodbc.connect(conn_str, timeout=10)
         test_conn.close()
         DB_AVAILABLE = True
-        print("[INFO] Azure MySQL Flexible Server connected successfully.")
+        print("[INFO] Azure SQL Database connected successfully.")
     except Exception as e:
-        # SSL cert may not exist locally — try without SSL
-        try:
-            db_config_no_ssl = {
-                'host': MYSQL_HOST,
-                'user': MYSQL_USER,
-                'password': MYSQL_PASSWORD,
-                'database': MYSQL_DB,
-                'cursorclass': pymysql.cursors.DictCursor,
-            }
-            test_conn = pymysql.connect(**db_config_no_ssl)
-            test_conn.close()
-            db_config = db_config_no_ssl
-            DB_AVAILABLE = True
-            print("[INFO] Azure MySQL connected (without SSL).")
-        except Exception as e2:
-            print(f"[WARNING] MySQL not available: {e2}. Running in frontend-only mode.")
+        print(f"[WARNING] Azure SQL not available: {e}. Running in frontend-only mode.")
 else:
-    print("[WARNING] MySQL env vars not set. Running in frontend-only mode.")
+    print("[WARNING] SQL env vars not set. Running in frontend-only mode.")
 
 
 def get_db_connection():
     """Get a fresh database connection."""
-    import pymysql
-    return pymysql.connect(**db_config)
+    import pyodbc
+    return pyodbc.connect(conn_str)
+
+
+def row_to_dict(cursor, row):
+    """Convert a pyodbc Row to a dictionary."""
+    if row is None:
+        return None
+    columns = [column[0] for column in cursor.description]
+    return dict(zip(columns, row))
+
+
+def rows_to_dicts(cursor, rows):
+    """Convert a list of pyodbc Rows to a list of dictionaries."""
+    columns = [column[0] for column in cursor.description]
+    return [dict(zip(columns, row)) for row in rows]
 
 
 @app.route('/')
@@ -77,8 +77,9 @@ def login():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password))
-        account = cursor.fetchone()
+        cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
+        row = cursor.fetchone()
+        account = row_to_dict(cursor, row)
         conn.close()
 
         if account:
@@ -104,7 +105,7 @@ def register():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password, email, balance) VALUES (%s, %s, %s, %s)",
+        cursor.execute("INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
                        (username, password, email, 0))
         conn.commit()
         conn.close()
@@ -125,11 +126,11 @@ def dashboard():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE id=%s", (session['id'],))
-    user = cursor.fetchone()
+    cursor.execute("SELECT * FROM users WHERE id=?", (session['id'],))
+    user = row_to_dict(cursor, cursor.fetchone())
 
-    cursor.execute("SELECT * FROM transactions WHERE user_id=%s ORDER BY timestamp DESC", (session['id'],))
-    transactions = cursor.fetchall()
+    cursor.execute("SELECT * FROM transactions WHERE user_id=? ORDER BY timestamp DESC", (session['id'],))
+    transactions = rows_to_dicts(cursor, cursor.fetchall())
 
     conn.close()
 
@@ -148,8 +149,8 @@ def deposit():
     amount = float(request.form['amount'])
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET balance = balance + %s WHERE id=%s", (amount, session['id']))
-    cursor.execute("INSERT INTO transactions (user_id, type, amount, description) VALUES (%s, 'deposit', %s, %s)",
+    cursor.execute("UPDATE users SET balance = balance + ? WHERE id=?", (amount, session['id']))
+    cursor.execute("INSERT INTO transactions (user_id, type, amount, description) VALUES (?, 'deposit', ?, ?)",
                    (session['id'], amount, 'Deposit'))
     conn.commit()
     conn.close()
