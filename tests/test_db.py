@@ -17,19 +17,18 @@ pytestmark = pytest.mark.skipif(
     reason="DB environment variables not set — skipping DB tests"
 )
 
-import pyodbc
+import pymssql
 
 
 def get_conn():
     """Create a fresh DB connection from env vars."""
-    return pyodbc.connect(
-        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER={os.environ['SQL_SERVER']};"
-        f"DATABASE={os.environ['SQL_DATABASE']};"
-        f"UID={os.environ['SQL_USER']};"
-        f"PWD={os.environ['SQL_PASSWORD']};"
-        f"Encrypt=yes;TrustServerCertificate=no;",
-        timeout=15
+    return pymssql.connect(
+        server=os.environ['SQL_SERVER'],
+        user=os.environ['SQL_USER'],
+        password=os.environ['SQL_PASSWORD'],
+        database=os.environ['SQL_DATABASE'],
+        timeout=30,
+        login_timeout=10
     )
 
 
@@ -109,15 +108,15 @@ def cleanup_test_user():
     """Remove the CI test user before and after each test."""
     conn = get_conn()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM transactions WHERE user_id IN (SELECT id FROM users WHERE username=?)", (TEST_USERNAME,))
-    cursor.execute("DELETE FROM users WHERE username=?", (TEST_USERNAME,))
+    cursor.execute("DELETE FROM transactions WHERE user_id IN (SELECT id FROM users WHERE username=%s)", (TEST_USERNAME,))
+    cursor.execute("DELETE FROM users WHERE username=%s", (TEST_USERNAME,))
     conn.commit()
     conn.close()
     yield
     conn = get_conn()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM transactions WHERE user_id IN (SELECT id FROM users WHERE username=?)", (TEST_USERNAME,))
-    cursor.execute("DELETE FROM users WHERE username=?", (TEST_USERNAME,))
+    cursor.execute("DELETE FROM transactions WHERE user_id IN (SELECT id FROM users WHERE username=%s)", (TEST_USERNAME,))
+    cursor.execute("DELETE FROM users WHERE username=%s", (TEST_USERNAME,))
     conn.commit()
     conn.close()
 
@@ -128,12 +127,12 @@ def test_insert_and_select_user():
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
+        "INSERT INTO users (username, password, email, balance) VALUES (%s, %s, %s, %s)",
         (TEST_USERNAME, "fakehash123", "ci@test.com", 0)
     )
     conn.commit()
 
-    cursor.execute("SELECT username, email, balance FROM users WHERE username=?", (TEST_USERNAME,))
+    cursor.execute("SELECT username, email, balance FROM users WHERE username=%s", (TEST_USERNAME,))
     row = cursor.fetchone()
     conn.close()
 
@@ -149,15 +148,15 @@ def test_update_balance():
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
+        "INSERT INTO users (username, password, email, balance) VALUES (%s, %s, %s, %s)",
         (TEST_USERNAME, "fakehash123", "ci@test.com", 0)
     )
     conn.commit()
 
-    cursor.execute("UPDATE users SET balance = balance + ? WHERE username=?", (500.0, TEST_USERNAME))
+    cursor.execute("UPDATE users SET balance = balance + %s WHERE username=%s", (500.0, TEST_USERNAME))
     conn.commit()
 
-    cursor.execute("SELECT balance FROM users WHERE username=?", (TEST_USERNAME,))
+    cursor.execute("SELECT balance FROM users WHERE username=%s", (TEST_USERNAME,))
     row = cursor.fetchone()
     conn.close()
 
@@ -170,21 +169,21 @@ def test_insert_transaction():
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
+        "INSERT INTO users (username, password, email, balance) VALUES (%s, %s, %s, %s)",
         (TEST_USERNAME, "fakehash123", "ci@test.com", 100)
     )
     conn.commit()
 
-    cursor.execute("SELECT id FROM users WHERE username=?", (TEST_USERNAME,))
+    cursor.execute("SELECT id FROM users WHERE username=%s", (TEST_USERNAME,))
     user_id = cursor.fetchone()[0]
 
     cursor.execute(
-        "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+        "INSERT INTO transactions (user_id, type, amount, description) VALUES (%s, %s, %s, %s)",
         (user_id, "deposit", 100.0, "CI test deposit")
     )
     conn.commit()
 
-    cursor.execute("SELECT type, amount, description FROM transactions WHERE user_id=?", (user_id,))
+    cursor.execute("SELECT type, amount, description FROM transactions WHERE user_id=%s", (user_id,))
     row = cursor.fetchone()
     conn.close()
 
