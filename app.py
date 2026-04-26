@@ -108,18 +108,44 @@ def register():
         return render_template('register.html')
 
     if request.method == 'POST':
-        username = request.form['username']
-        password = hashlib.sha256(request.form['password'].encode()).hexdigest()
-        email = request.form['email']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        email = request.form.get('email', '').strip()
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
-                       (username, password, email, 0))
-        conn.commit()
-        conn.close()
-        flash('Account created successfully! You can now log in.', 'success')
-        return redirect(url_for('index'))
+        if not username or not password or not email:
+            flash('All fields are required.', 'danger')
+            return render_template('register.html')
+
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            # Check if username already exists
+            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            if cursor.fetchone():
+                conn.close()
+                flash('Username already exists. Please choose a different one.', 'danger')
+                return render_template('register.html')
+            # Check if email already exists
+            cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+            if cursor.fetchone():
+                conn.close()
+                flash('Email already registered. Please use a different email.', 'danger')
+                return render_template('register.html')
+            cursor.execute(
+                "INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
+                (username, hashed_password, email, 0)
+            )
+            conn.commit()
+            conn.close()
+            flash('Account created successfully! You can now log in.', 'success')
+            return redirect(url_for('index'))
+        except Exception as e:
+            print(f"[ERROR] Registration failed: {e}")
+            flash('Registration failed due to a server error. Please try again.', 'danger')
+            return render_template('register.html')
+
     return render_template('register.html')
 
 
