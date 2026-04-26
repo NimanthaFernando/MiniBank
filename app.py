@@ -17,8 +17,17 @@ SQL_PASSWORD = os.environ.get('SQL_PASSWORD')
 if SQL_SERVER and SQL_USER and SQL_PASSWORD and SQL_DATABASE:
     try:
         import pyodbc
+        # Auto-detect available ODBC driver (18 preferred, 17 as fallback)
+        _driver = None
+        for _d in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"]:
+            if _d in pyodbc.drivers():
+                _driver = _d
+                break
+        if not _driver:
+            raise RuntimeError(f"No compatible ODBC driver found. Available: {pyodbc.drivers()}")
+
         conn_str = (
-            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+            f"DRIVER={{{_driver}}};"
             f"SERVER={SQL_SERVER};"
             f"DATABASE={SQL_DATABASE};"
             f"UID={SQL_USER};"
@@ -30,7 +39,7 @@ if SQL_SERVER and SQL_USER and SQL_PASSWORD and SQL_DATABASE:
         test_conn = pyodbc.connect(conn_str, timeout=10)
         test_conn.close()
         DB_AVAILABLE = True
-        print("[INFO] Azure SQL Database connected successfully.")
+        print(f"[INFO] Azure SQL Database connected successfully (using {_driver}).")
     except Exception as e:
         print(f"[WARNING] Azure SQL not available: {e}. Running in frontend-only mode.")
 else:
@@ -170,32 +179,23 @@ def debug_info():
     """Temporary debug endpoint - REMOVE after fixing DB connection."""
     import pyodbc
     info = {
-        'SQL_SERVER': SQL_SERVER if SQL_SERVER else '❌ NOT SET',
-        'SQL_DATABASE': SQL_DATABASE if SQL_DATABASE else '❌ NOT SET',
-        'SQL_USER': SQL_USER if SQL_USER else '❌ NOT SET',
-        'SQL_PASSWORD': '✅ SET' if SQL_PASSWORD else '❌ NOT SET',
+        'SQL_SERVER': SQL_SERVER if SQL_SERVER else 'NOT SET',
+        'SQL_DATABASE': SQL_DATABASE if SQL_DATABASE else 'NOT SET',
+        'SQL_USER': SQL_USER if SQL_USER else 'NOT SET',
+        'SQL_PASSWORD': 'SET' if SQL_PASSWORD else 'NOT SET',
         'DB_AVAILABLE': DB_AVAILABLE,
         'ODBC_DRIVERS': pyodbc.drivers(),
     }
 
     # Try connecting and capture error
     connection_error = None
-    if SQL_SERVER and SQL_USER and SQL_PASSWORD and SQL_DATABASE:
+    if conn_str:
         try:
-            test_str = (
-                f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-                f"SERVER={SQL_SERVER};"
-                f"DATABASE={SQL_DATABASE};"
-                f"UID={SQL_USER};"
-                f"PWD={SQL_PASSWORD};"
-                f"Encrypt=yes;"
-                f"TrustServerCertificate=no;"
-            )
-            test_conn = pyodbc.connect(test_str, timeout=10)
+            test_conn = pyodbc.connect(conn_str, timeout=10)
             test_conn.close()
-            connection_error = "✅ Connection successful!"
+            connection_error = "Connection successful!"
         except Exception as e:
-            connection_error = f"❌ {str(e)}"
+            connection_error = f"FAILED: {str(e)}"
 
     info['CONNECTION_TEST'] = connection_error
     return '<br>'.join([f'<b>{k}</b>: {v}' for k, v in info.items()])
