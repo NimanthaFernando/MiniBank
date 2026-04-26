@@ -41,15 +41,123 @@ jobs:
             .
             !antenv/
 
-      # 🚫 Opting Out of Oryx Build
-      # If you prefer to disable the Oryx build process during deployment, follow these steps:
-      # 1. Remove the SCM_DO_BUILD_DURING_DEPLOYMENT app setting from your Azure App Service Environment variables.
-      # 2. Refer to sample workflows for alternative deployment strategies: https://github.com/Azure/actions-workflow-samples/tree/master/AppService
-      
+  # ─── Unit Tests (no DB needed) ───
+  test-unit:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: python-app
+
+      - name: Set up Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/test_basic.py -v
+
+  # ─── DB Connection & Integration Tests ───
+  test-db:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+    env:
+      SQL_SERVER: ${{ secrets.SQL_SERVER }}
+      SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
+      SQL_USER: ${{ secrets.SQL_USER }}
+      SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: python-app
+
+      - name: Set up Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ODBC Driver 18
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Test DB connection
+        run: |
+          python -c "
+          import pyodbc, os
+          conn_str = (
+              'DRIVER={ODBC Driver 18 for SQL Server};'
+              f'SERVER={os.environ[\"SQL_SERVER\"]};'
+              f'DATABASE={os.environ[\"SQL_DATABASE\"]};'
+              f'UID={os.environ[\"SQL_USER\"]};'
+              f'PWD={os.environ[\"SQL_PASSWORD\"]};'
+              'Encrypt=yes;TrustServerCertificate=no;'
+          )
+          conn = pyodbc.connect(conn_str, timeout=15)
+          cursor = conn.cursor()
+          cursor.execute('SELECT 1')
+          assert cursor.fetchone()[0] == 1
+          print('✅ DB connection successful')
+          conn.close()
+          "
+
+      - name: Verify DB tables exist
+        run: |
+          python -c "
+          import pyodbc, os
+          conn_str = (
+              'DRIVER={ODBC Driver 18 for SQL Server};'
+              f'SERVER={os.environ[\"SQL_SERVER\"]};'
+              f'DATABASE={os.environ[\"SQL_DATABASE\"]};'
+              f'UID={os.environ[\"SQL_USER\"]};'
+              f'PWD={os.environ[\"SQL_PASSWORD\"]};'
+              'Encrypt=yes;TrustServerCertificate=no;'
+          )
+          conn = pyodbc.connect(conn_str, timeout=15)
+          cursor = conn.cursor()
+
+          # Check users table
+          cursor.execute(\"SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='users'\")
+          assert cursor.fetchone() is not None, '❌ users table not found'
+          print('✅ users table exists')
+
+          # Check transactions table
+          cursor.execute(\"SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='transactions'\")
+          assert cursor.fetchone() is not None, '❌ transactions table not found'
+          print('✅ transactions table exists')
+
+          conn.close()
+          "
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/test_db.py -v
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [test-unit, test-db]
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
