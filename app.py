@@ -16,30 +16,19 @@ SQL_PASSWORD = os.environ.get('SQL_PASSWORD')
 
 if SQL_SERVER and SQL_USER and SQL_PASSWORD and SQL_DATABASE:
     try:
-        import pyodbc
-        # Auto-detect available ODBC driver (18 preferred, 17 as fallback)
-        _driver = None
-        for _d in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"]:
-            if _d in pyodbc.drivers():
-                _driver = _d
-                break
-        if not _driver:
-            raise RuntimeError(f"No compatible ODBC driver found. Available: {pyodbc.drivers()}")
-
-        conn_str = (
-            f"DRIVER={{{_driver}}};"
-            f"SERVER={SQL_SERVER};"
-            f"DATABASE={SQL_DATABASE};"
-            f"UID={SQL_USER};"
-            f"PWD={SQL_PASSWORD};"
-            f"Encrypt=yes;"
-            f"TrustServerCertificate=no;"
-        )
+        import pymssql
         # Test connection on startup
-        test_conn = pyodbc.connect(conn_str, timeout=10)
+        test_conn = pymssql.connect(
+            server=SQL_SERVER,
+            user=SQL_USER,
+            password=SQL_PASSWORD,
+            database=SQL_DATABASE,
+            timeout=10,
+            login_timeout=10
+        )
         test_conn.close()
         DB_AVAILABLE = True
-        print(f"[INFO] Azure SQL Database connected successfully (using {_driver}).")
+        print("[INFO] Azure SQL Database connected successfully (using pymssql).")
     except Exception as e:
         print(f"[WARNING] Azure SQL not available: {e}. Running in frontend-only mode.")
 else:
@@ -48,12 +37,19 @@ else:
 
 def get_db_connection():
     """Get a fresh database connection."""
-    import pyodbc
-    return pyodbc.connect(conn_str)
+    import pymssql
+    return pymssql.connect(
+        server=SQL_SERVER,
+        user=SQL_USER,
+        password=SQL_PASSWORD,
+        database=SQL_DATABASE,
+        timeout=30,
+        login_timeout=10
+    )
 
 
 def row_to_dict(cursor, row):
-    """Convert a pyodbc Row to a dictionary."""
+    """Convert a pymssql Row to a dictionary."""
     if row is None:
         return None
     columns = [column[0] for column in cursor.description]
@@ -61,7 +57,7 @@ def row_to_dict(cursor, row):
 
 
 def rows_to_dicts(cursor, rows):
-    """Convert a list of pyodbc Rows to a list of dictionaries."""
+    """Convert a list of pymssql Rows to a list of dictionaries."""
     columns = [column[0] for column in cursor.description]
     return [dict(zip(columns, row)) for row in rows]
 
@@ -86,7 +82,7 @@ def login():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
+        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password))
         row = cursor.fetchone()
         account = row_to_dict(cursor, row)
         conn.close()
@@ -122,19 +118,19 @@ def register():
             conn = get_db_connection()
             cursor = conn.cursor()
             # Check if username already exists
-            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
             if cursor.fetchone():
                 conn.close()
                 flash('Username already exists. Please choose a different one.', 'danger')
                 return render_template('register.html')
             # Check if email already exists
-            cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
             if cursor.fetchone():
                 conn.close()
                 flash('Email already registered. Please use a different email.', 'danger')
                 return render_template('register.html')
             cursor.execute(
-                "INSERT INTO users (username, password, email, balance) VALUES (?, ?, ?, ?)",
+                "INSERT INTO users (username, password, email, balance) VALUES (%s, %s, %s, %s)",
                 (username, hashed_password, email, 0)
             )
             conn.commit()
@@ -161,10 +157,10 @@ def dashboard():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE id=?", (session['id'],))
+    cursor.execute("SELECT * FROM users WHERE id=%s", (session['id'],))
     user = row_to_dict(cursor, cursor.fetchone())
 
-    cursor.execute("SELECT * FROM transactions WHERE user_id=? ORDER BY timestamp DESC", (session['id'],))
+    cursor.execute("SELECT * FROM transactions WHERE user_id=%s ORDER BY timestamp DESC", (session['id'],))
     transactions = rows_to_dicts(cursor, cursor.fetchall())
 
     conn.close()
@@ -184,8 +180,8 @@ def deposit():
     amount = float(request.form['amount'])
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET balance = balance + ? WHERE id=?", (amount, session['id']))
-    cursor.execute("INSERT INTO transactions (user_id, type, amount, description) VALUES (?, 'deposit', ?, ?)",
+    cursor.execute("UPDATE users SET balance = balance + %s WHERE id=%s", (amount, session['id']))
+    cursor.execute("INSERT INTO transactions (user_id, type, amount, description) VALUES (%s, 'deposit', %s, %s)",
                    (session['id'], amount, 'Deposit'))
     conn.commit()
     conn.close()
@@ -202,28 +198,26 @@ def logout():
 
 @app.route('/debug')
 def debug_info():
-    """Temporary debug endpoint - REMOVE after fixing DB connection."""
-    import pyodbc
+    """Debug endpoint - shows DB connection status."""
     info = {
         'SQL_SERVER': SQL_SERVER if SQL_SERVER else 'NOT SET',
         'SQL_DATABASE': SQL_DATABASE if SQL_DATABASE else 'NOT SET',
         'SQL_USER': SQL_USER if SQL_USER else 'NOT SET',
         'SQL_PASSWORD': 'SET' if SQL_PASSWORD else 'NOT SET',
         'DB_AVAILABLE': DB_AVAILABLE,
-        'ODBC_DRIVERS': pyodbc.drivers(),
+        'DRIVER': 'pymssql',
     }
 
-    # Try connecting and capture error
-    connection_error = None
-    if conn_str:
-        try:
-            test_conn = pyodbc.connect(conn_str, timeout=10)
-            test_conn.close()
-            connection_error = "Connection successful!"
-        except Exception as e:
-            connection_error = f"FAILED: {str(e)}"
+    # Try a live connection test
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        conn.close()
+        info['CONNECTION_TEST'] = 'Connection successful!'
+    except Exception as e:
+        info['CONNECTION_TEST'] = f'FAILED: {str(e)}'
 
-    info['CONNECTION_TEST'] = connection_error
     return '<br>'.join([f'<b>{k}</b>: {v}' for k, v in info.items()])
 
 
