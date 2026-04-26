@@ -71,7 +71,6 @@ jobs:
     needs: build
     permissions:
       contents: read
-      id-token: write
     env:
       SQL_SERVER: ${{ secrets.SQL_SERVER }}
       SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
@@ -101,40 +100,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Login to Azure (for firewall management)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Add runner IP to SQL Server firewall
-        run: |
-          RUNNER_IP=$(curl -s https://api.ipify.org)
-          echo "Runner IP: $RUNNER_IP"
-          echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
-          az sql server firewall-rule create \
-            --resource-group webapp \
-            --server nsdbserver1 \
-            --name GitHubActionsCI \
-            --start-ip-address $RUNNER_IP \
-            --end-ip-address $RUNNER_IP
-          echo "Firewall rule added. Waiting 10s for propagation..."
-          sleep 10
-
       - name: Run integration tests
         run: |
           python -m pytest tests/test_db.py -v
-
-      - name: Remove runner IP from SQL Server firewall
-        if: always()
-        run: |
-          az sql server firewall-rule delete \
-            --resource-group webapp \
-            --server nsdbserver1 \
-            --name GitHubActionsCI \
-            --yes || true
-          echo "Firewall rule removed."
 
   deploy:
     runs-on: ubuntu-latest
