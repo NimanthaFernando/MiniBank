@@ -2,16 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title if title else "Mini Bank" }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <header>
         <h1>🏦 Mini Bank</h1>
-        {% if session.loggedin %}
+        {% if session.user %}
             <nav>
+                <span class="user-greeting">Signed in as <strong>{{ session.user.name }}</strong></span>
                 <a href="{{ url_for('dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('logout') }}">Logout</a>
+                <a href="{{ url_for('logout') }}">Sign Out</a>
             </nav>
         {% endif %}
     </header>
@@ -28,7 +30,7 @@
     </div>
 
     <footer>
-        <p>© 2025 Mini Bank</p>
+        <p>&copy; 2025 Mini Bank &mdash; Secured with Microsoft Entra ID</p>
     </footer>
 </body>
 </html>

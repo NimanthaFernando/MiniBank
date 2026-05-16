@@ -1,10 +1,31 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Login</h2>
-<form action="/login" method="post">
-    <input type="text" name="username" placeholder="Username" required><br>
-    <input type="password" name="password" placeholder="Password" required><br>
-    <button type="submit">Login</button>
-</form>
-<p>Don’t have an account? <a href="{{ url_for('register') }}">Register</a></p>
+<div class="login-card">
+    <h2>Welcome to Mini Bank</h2>
+    <p class="login-subtitle">Sign in with your Microsoft account to continue</p>
+
+    {% if oidc_configured %}
+        <a href="{{ url_for('login') }}" class="btn-microsoft" id="btn-sign-in">
+            <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            <span>Sign in with Microsoft</span>
+        </a>
+    {% else %}
+        <div class="flash danger">
+            Microsoft Entra ID is not configured.<br>
+            Set <code>AZURE_CLIENT_ID</code> and <code>AZURE_CLIENT_SECRET</code> environment variables.
+        </div>
+    {% endif %}
+
+    <p class="login-footer-text">
+        Your identity is managed securely by
+        <a href="https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id"
+           target="_blank" rel="noopener">Microsoft Entra ID</a>
+        using OAuth&nbsp;2.0 / OpenID&nbsp;Connect.
+    </p>
+</div>
 {% endblock %}

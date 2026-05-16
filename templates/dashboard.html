@@ -1,10 +1,21 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Welcome, {{ user.username }}!</h2>
+
+{% if user.email %}
+<p class="user-email">{{ user.email }}</p>
+{% endif %}
+
 <p><strong>Balance:</strong> ${{ "%.2f"|format(user.balance) }}</p>
 
+{% if db_available is defined and not db_available %}
+<div class="flash info">
+    Database is not configured. Account balance and transactions are unavailable.
+</div>
+{% else %}
+
 <h3>Deposit Money</h3>
-<form method="post" action="/deposit">
+<form method="post" action="/deposit" id="deposit-form">
     <input type="number" name="amount" placeholder="Amount" step="0.01" min="1" required>
     <button type="submit">Deposit</button>
 </form>
@@ -28,4 +39,5 @@
     <tr><td colspan="4">No transactions yet.</td></tr>
     {% endfor %}
 </table>
+{% endif %}
 {% endblock %}

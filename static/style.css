@@ -1,5 +1,5 @@
 body {
-    font-family: Arial, sans-serif;
+    font-family: 'Segoe UI', Arial, sans-serif;
     background-color: #f3f6fa;
     margin: 0;
     padding: 0;
@@ -8,14 +8,28 @@ body {
 header {
     background-color: #003366;
     color: white;
-    padding: 15px;
+    padding: 15px 20px;
     text-align: center;
+}
+
+header nav {
+    margin-top: 8px;
 }
 
 header nav a {
     color: white;
     margin: 0 10px;
     text-decoration: none;
+}
+
+header nav a:hover {
+    text-decoration: underline;
+}
+
+.user-greeting {
+    color: #a0c4e8;
+    margin-right: 15px;
+    font-size: 0.9em;
 }
 
 .container {
@@ -27,6 +41,56 @@ header nav a {
     box-shadow: 0 0 10px #ccc;
 }
 
+/* --- Login card --- */
+.login-card {
+    text-align: center;
+    padding: 30px 10px;
+}
+
+.login-subtitle {
+    color: #555;
+    margin-bottom: 30px;
+}
+
+.btn-microsoft {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 28px;
+    background: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: box-shadow 0.2s, background 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.btn-microsoft:hover {
+    background: #f7f8f8;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.login-footer-text {
+    margin-top: 30px;
+    font-size: 0.85em;
+    color: #777;
+}
+
+.login-footer-text a {
+    color: #0055aa;
+}
+
+.user-email {
+    color: #666;
+    font-size: 0.9em;
+    margin-top: -8px;
+}
+
+/* --- Forms --- */
 input, button {
     width: 90%;
     padding: 10px;
@@ -45,6 +109,7 @@ button:hover {
     background-color: #0055aa;
 }
 
+/* --- Flash messages --- */
 .flash {
     padding: 10px;
     margin-bottom: 15px;
@@ -52,9 +117,17 @@ button:hover {
 }
 
 .flash.success { background-color: #c8e6c9; color: #256029; }
-.flash.danger { background-color: #ffcdd2; color: #b71c1c; }
-.flash.info { background-color: #bbdefb; color: #0d47a1; }
+.flash.danger  { background-color: #ffcdd2; color: #b71c1c; }
+.flash.info    { background-color: #bbdefb; color: #0d47a1; }
 
+.flash code {
+    background: rgba(0,0,0,0.07);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* --- Tables --- */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -67,6 +140,7 @@ th, td {
     text-align: center;
 }
 
+/* --- Footer --- */
 footer {
     text-align: center;
     padding: 10px;

@@ -1,3 +1,5 @@
 Flask
 gunicorn
 pyodbc
+msal
+flask-session
